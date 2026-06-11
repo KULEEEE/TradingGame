@@ -17,7 +17,7 @@ Node.js 서버 하나로 가격 시뮬레이션, 거래 체결, 리더보드가 
 
 | 프로그램 | 용도 | 설치 |
 |---|---|---|
-| [Node.js](https://nodejs.org/ko/download) (18 이상) | 게임 서버 실행 | 공식 사이트에서 LTS 버전 설치 |
+| [Node.js](https://nodejs.org/ko/download) (18+) | 게임 서버 실행 | 공식 사이트에서 LTS 버전 설치 |
 | [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) | 외부 접속용 Cloudflare 터널 | `winget install Cloudflare.cloudflared` (macOS: `brew install cloudflared`) |
 
 cloudflared는 계정 가입 없이 설치만 하면 됩니다.
