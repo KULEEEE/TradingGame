@@ -1,0 +1,51 @@
+/* 관리자 화면 */
+.login { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+.login-card { width: 100%; max-width: 340px; text-align: center; display: flex; flex-direction: column; gap: 14px; }
+.login-card input { text-align: center; font-size: 17px; }
+button.primary { background: var(--accent); color: #1a1405; font-weight: 800; border: none; padding: 12px; font-size: 16px; }
+.err-msg { color: var(--up); min-height: 18px; font-size: 14px; }
+
+header { display: flex; align-items: center; gap: 16px; padding: 14px 22px; background: var(--panel); border-bottom: 1px solid var(--border); }
+header h1 { font-size: 22px; }
+.status-pill { font-weight: 700; padding: 4px 14px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
+.status-pill.running { color: var(--good); border-color: var(--good); }
+.status-pill.paused { color: var(--accent); border-color: var(--accent); }
+.status-pill.ended { color: var(--up); border-color: var(--up); }
+.timer { font-size: 24px; font-weight: 800; }
+
+main { padding: 18px 22px; display: flex; flex-direction: column; gap: 18px; max-width: 1280px; margin: 0 auto; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+.card h2 { font-size: 17px; margin-bottom: 12px; color: var(--accent); }
+
+.btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+button.good   { border-color: var(--good); color: var(--good); }
+button.warn   { border-color: var(--accent); color: var(--accent); }
+button.danger { border-color: var(--up); color: var(--up); }
+button.up-btn   { background: #3d1116; border-color: var(--up); color: var(--up); font-weight: 700; }
+button.down-btn { background: #11233d; border-color: var(--down); color: var(--down); font-weight: 700; }
+
+.settings-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.settings-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.settings-row input { width: 130px; }
+
+.news-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.news-row input { flex: 1; min-width: 260px; }
+.hint { font-size: 12px; margin-top: 8px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+td input { width: 80px; padding: 5px 8px; font-size: 13px; }
+td .mini { padding: 5px 9px; font-size: 12px; }
+td .cell-name { font-weight: 700; }
+td .cell-sym { color: var(--muted); font-size: 12px; }
+.jump-cell { display: flex; gap: 4px; align-items: center; }
+.jump-cell input { width: 58px; }
+
+.add-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+
+@media (max-width: 800px) {
+  main { padding: 12px; }
+  table { font-size: 12px; display: block; overflow-x: auto; white-space: nowrap; }
+}

@@ -1,0 +1,108 @@
+/* 공통 다크 테마 — 거래소 전광판 느낌 */
+:root {
+  --bg: #0d111c;
+  --panel: #151b2c;
+  --panel2: #1c2436;
+  --border: #232c42;
+  --text: #e8ecf4;
+  --muted: #8b95a9;
+  --up: #f04452;     /* 한국식: 상승 빨강 */
+  --down: #3182f6;   /* 하락 파랑 */
+  --flat: #8b95a9;
+  --accent: #ffd166;
+  --good: #2dd4bf;
+  --radius: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+button {
+  font-family: inherit;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+input, select {
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 15px;
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+.up   { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--flat); }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 6px;
+  vertical-align: middle;
+}
+.badge.halt    { background: #4a3208; color: #ffd166; }
+.badge.delist  { background: #3d1116; color: #f04452; }
+.badge.warning { background: #f04452; color: #fff; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0.45; } }
+
+/* 토스트 */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+  width: max-content;
+  max-width: 92vw;
+}
+.toast-item {
+  background: rgba(20, 27, 45, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  animation: toast-in 0.2s ease;
+}
+.toast-item.err { border-color: var(--up); }
+.toast-item.ok  { border-color: var(--good); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* 뉴스 티커 */
+.ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+}
+.ticker-inner {
+  display: inline-block;
+  padding-left: 100%;
+  animation: ticker-move 30s linear infinite;
+}
+@keyframes ticker-move {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}

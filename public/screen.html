@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>워크샵 모의투자 — 메인 스크린</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/screen.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">📈 워크샵 모의투자</div>
+    <div id="gameStatus" class="status-pill">대기 중</div>
+    <div id="timer" class="timer">--:--</div>
+  </header>
+
+  <main>
+    <section id="stockGrid"></section>
+    <aside>
+      <div class="panel" id="leaderPanel">
+        <h2>🏆 리더보드 <span id="playerCount" class="muted"></span></h2>
+        <ol id="leaderboard"></ol>
+      </div>
+      <div class="panel qr-panel">
+        <h2>📱 QR로 참가하세요</h2>
+        <img id="qrImg" alt="참가 QR코드">
+        <div id="joinUrl" class="join-url"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="newsTicker" class="ticker"><div class="ticker-inner" id="tickerInner">시장 뉴스가 여기에 표시됩니다…</div></footer>
+
+  <!-- 대형 차트 모달 -->
+  <div id="chartModal" class="overlay hidden">
+    <div class="chart-box">
+      <div class="chart-head">
+        <span id="chartTitle"></span>
+        <span id="chartPrice"></span>
+        <span class="muted" style="margin-left:auto;font-size:16px">클릭하면 닫힙니다</span>
+      </div>
+      <div id="bigChart"></div>
+    </div>
+  </div>
+
+  <!-- 서킷브레이커 오버레이 -->
+  <div id="pausedOverlay" class="overlay center hidden">
+    <div class="big-msg">⏸ 장 일시정지<br><span class="sub">서킷브레이커 발동 — 잠시 후 재개됩니다</span></div>
+  </div>
+
+  <!-- 상폐 카운트다운 배너 -->
+  <div id="delistBanner" class="delist-banner hidden"></div>
+
+  <!-- 최종 시상식 -->
+  <div id="finalOverlay" class="overlay center hidden">
+    <div class="final-box">
+      <h1>🏁 최종 결과 발표</h1>
+      <div id="podium" class="podium"></div>
+      <ol id="finalRest" class="final-rest"></ol>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/lightweight-charts.js"></script>
+  <script type="module" src="/js/screen.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "workshop-trading-game",
+  "version": "1.0.0",
+  "description": "사내 워크샵용 실시간 모의 주식 트레이딩 게임",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "dev:tunnel": "node server/index.js --tunnel",
+    "verify": "node scripts/verify.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "lightweight-charts": "^4.2.3",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

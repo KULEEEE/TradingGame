@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>워크샵 모의투자 — 관리자</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <!-- 로그인 -->
+  <div id="loginView" class="login hidden">
+    <div class="login-card">
+      <h1>🔐 관리자 로그인</h1>
+      <input id="pwInput" type="password" placeholder="비밀번호">
+      <button id="loginBtn" class="primary">로그인</button>
+      <p id="loginErr" class="err-msg"></p>
+    </div>
+  </div>
+
+  <!-- 메인 -->
+  <div id="adminView" class="hidden">
+    <header>
+      <h1>🎛 관리자</h1>
+      <span id="gameStatus" class="status-pill"></span>
+      <span id="timer" class="timer"></span>
+      <span id="playerCount" class="muted"></span>
+    </header>
+
+    <main>
+      <!-- 게임 제어 -->
+      <section class="card">
+        <h2>게임 제어</h2>
+        <div class="btn-row">
+          <button id="btnStart" class="good">▶ 시작</button>
+          <button id="btnPause" class="warn">⏸ 서킷브레이커</button>
+          <button id="btnResume" class="good">▶ 재개</button>
+          <button id="btnEnd" class="danger">🏁 종료</button>
+          <button id="btnReset" class="danger">🔄 리셋</button>
+        </div>
+        <div class="settings-row">
+          <label>초기자금 <input id="setCash" type="number" step="100000"></label>
+          <label>게임시간(분) <input id="setDuration" type="number" min="1"></label>
+          <label>수수료율(%) <input id="setFee" type="number" step="0.01" min="0"></label>
+          <button id="btnSettings">설정 적용</button>
+        </div>
+      </section>
+
+      <!-- 전체 시장 이벤트 / 뉴스 -->
+      <section class="card">
+        <h2>시장 이벤트 · 뉴스</h2>
+        <div class="btn-row">
+          <span class="muted">강도</span>
+          <select id="evStrength">
+            <option value="weak">약</option>
+            <option value="mid" selected>중</option>
+            <option value="strong">강</option>
+          </select>
+          <span class="muted">지속</span>
+          <select id="evDuration">
+            <option value="15">15초</option>
+            <option value="30" selected>30초</option>
+            <option value="60">60초</option>
+          </select>
+          <button id="btnBoom" class="up-btn">🚀 시장 호황</button>
+          <button id="btnCrash" class="down-btn">📉 시장 폭락</button>
+        </div>
+        <div class="news-row">
+          <input id="newsText" placeholder="뉴스 헤드라인 입력 (예: 치킨공방, 신메뉴 대박)">
+          <select id="newsSymbol"><option value="">가격효과 없음</option></select>
+          <select id="newsDirection">
+            <option value="1">급등</option>
+            <option value="-1">급락</option>
+          </select>
+          <button id="btnNews">📰 발송</button>
+          <button id="btnNewsClear" class="danger">🧹 뉴스 전체 삭제</button>
+        </div>
+        <p class="muted hint">가격효과를 선택하면 위의 강도/지속시간 설정으로 해당 종목에 드리프트가 적용됩니다.</p>
+      </section>
+
+      <!-- 종목 관리 -->
+      <section class="card">
+        <h2>종목 관리</h2>
+        <table id="stockTable">
+          <thead>
+            <tr>
+              <th>종목</th><th>현재가</th><th>등락률</th>
+              <th>변동성 σ</th><th>드리프트 μ</th><th></th>
+              <th>급등/급락</th><th>즉시 점프</th><th>정지</th><th>상폐</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="add-row">
+          <input id="addSymbol" placeholder="심볼 (예: PZZA)" style="width:110px" maxlength="6">
+          <input id="addName" placeholder="종목명" style="width:140px" maxlength="20">
+          <input id="addPrice" type="number" placeholder="시작가" style="width:110px">
+          <input id="addVol" type="number" step="0.001" placeholder="σ (0.02)" style="width:100px">
+          <input id="addDrift" type="number" step="0.0001" placeholder="μ (0.0002)" style="width:110px">
+          <button id="btnAddStock">➕ 종목 추가</button>
+        </div>
+      </section>
+
+      <!-- 참가자 -->
+      <section class="card">
+        <h2>참가자</h2>
+        <table id="playerTable">
+          <thead><tr><th>순위</th><th>닉네임</th><th>총자산</th><th>수익률</th><th>접속</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

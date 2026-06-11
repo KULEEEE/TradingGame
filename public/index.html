@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d111c">
+  <title>워크샵 모의투자</title>
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+  <!-- 참가 화면 -->
+  <div id="joinView" class="view hidden">
+    <div class="join-card">
+      <h1>📈 워크샵 모의투자</h1>
+      <p class="muted">닉네임을 입력하고 가상 자금으로<br>최고의 수익률에 도전하세요!</p>
+      <input id="nickInput" maxlength="12" placeholder="닉네임 (1~12자)" autocomplete="off">
+      <button id="joinBtn" class="primary">참가하기</button>
+      <p id="joinErr" class="err-msg"></p>
+    </div>
+  </div>
+
+  <!-- 메인 앱 -->
+  <div id="appView" class="view hidden">
+    <header id="myHeader">
+      <div class="row1">
+        <span id="myNick" class="nick"></span>
+        <span id="myRank" class="rank"></span>
+        <span id="gameBadge" class="game-badge"></span>
+        <span id="gameTimer" class="game-timer"></span>
+      </div>
+      <div class="row2">
+        <div class="stat"><label>총자산</label><b id="myTotal">-</b></div>
+        <div class="stat"><label>현금</label><b id="myCash">-</b></div>
+        <div class="stat"><label>수익률</label><b id="myReturn">-</b></div>
+      </div>
+    </header>
+
+    <div id="newsBar" class="hidden"></div>
+
+    <main>
+      <section id="tab-market" class="tab"></section>
+
+      <section id="tab-portfolio" class="tab hidden">
+        <div class="section-title">보유 종목</div>
+        <div id="portfolioList"></div>
+      </section>
+
+      <section id="tab-history" class="tab hidden">
+        <div class="section-title">거래 내역</div>
+        <div id="tradeList"></div>
+      </section>
+    </main>
+
+    <nav id="bottomNav">
+      <button data-tab="market" class="active">📊 시세</button>
+      <button data-tab="portfolio">💼 포트폴리오</button>
+      <button data-tab="history">📋 내역</button>
+    </nav>
+  </div>
+
+  <!-- 종목 상세 시트 -->
+  <div id="detailSheet" class="sheet hidden">
+    <div class="sheet-head">
+      <button id="detailBack">←</button>
+      <div>
+        <div id="detailName" class="d-name"></div>
+        <div><span id="detailPrice" class="d-price"></span> <span id="detailChg" class="d-chg"></span></div>
+      </div>
+      <div id="detailBadge"></div>
+    </div>
+    <div id="detailChart"></div>
+    <div id="myPosition" class="position hidden"></div>
+    <div class="trade-panel">
+      <div class="side-toggle">
+        <button id="sideBuy" class="buy active">매수</button>
+        <button id="sideSell" class="sell">매도</button>
+      </div>
+      <div class="qty-row">
+        <input id="qtyInput" type="number" inputmode="numeric" min="1" placeholder="수량">
+        <button id="maxBtn">최대</button>
+      </div>
+      <div class="estimate"><span class="muted">예상 체결 금액</span><b id="estAmount">0원</b></div>
+      <button id="orderBtn" class="order buy">매수하기</button>
+      <p id="tradeBlocked" class="err-msg hidden"></p>
+    </div>
+  </div>
+
+  <!-- 최종 결과 -->
+  <div id="finalSheet" class="overlay-final hidden">
+    <h1>🏁 게임 종료!</h1>
+    <div id="myResult"></div>
+    <ol id="finalTop"></ol>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/lightweight-charts.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
