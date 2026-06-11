@@ -178,6 +178,7 @@ io.on('connection', (socket) => {
     return r;
   }));
   socket.on(EV.ADMIN_STOCK_UPDATE, admin(p => game.updateStock(p.symbol, p)));
+  socket.on(EV.ADMIN_STOCK_REMOVE, admin(p => game.removeStock(p.symbol)));
   socket.on(EV.ADMIN_STOCK_HALT, admin(p => game.haltStock(p.symbol, p.halted)));
   socket.on(EV.ADMIN_STOCK_JUMP, admin(p => game.jumpStock(p.symbol, p.pct)));
   socket.on(EV.ADMIN_SURGE, admin(p => game.surgeStock(p.symbol, p.direction, p.strength, p.durationSec)));

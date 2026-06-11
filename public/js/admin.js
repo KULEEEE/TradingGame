@@ -134,10 +134,19 @@ function renderStockTable() {
   for (const st of stocks) {
     const tr = document.createElement('tr');
     tr.dataset.sym = st.symbol;
+    const removeBtn = '<button class="mini danger b-remove">삭제</button>';
+    const bindRemove = () => tr.querySelector('.b-remove').addEventListener('click', () => {
+      const warn = st.delisted ? '' : '\n보유 중인 참가자가 있으면 현재가로 자동 매도됩니다.';
+      if (confirm(`${st.name}(${st.symbol}) 종목을 목록에서 삭제할까요?${warn}`))
+        emitAck(socket, EV.ADMIN_STOCK_REMOVE, { symbol: st.symbol })
+          .then(r => toast(r.ok ? `${st.symbol} 삭제됨` : r.error, r.ok ? 'ok' : 'err'));
+    });
     if (st.delisted) {
       tr.innerHTML = `
         <td><span class="cell-name">${esc(st.name)}</span> <span class="cell-sym">${st.symbol}</span></td>
-        <td colspan="8"><span class="badge delist">상장폐지</span></td><td></td>`;
+        <td colspan="8"><span class="badge delist">상장폐지</span></td><td></td>
+        <td>${removeBtn}</td>`;
+      bindRemove();
       tbody.appendChild(tr);
       continue;
     }
@@ -159,7 +168,9 @@ function renderStockTable() {
       <td>
         <button class="mini danger b-delist">상폐</button>
         <button class="mini danger b-delist-now">즉시</button>
-      </td>`;
+      </td>
+      <td>${removeBtn}</td>`;
+    bindRemove();
 
     const sym = st.symbol;
     tr.querySelector('.b-apply').addEventListener('click', async () => {

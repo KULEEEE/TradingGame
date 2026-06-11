@@ -36,14 +36,17 @@
       </div>
     </header>
 
-    <div id="newsBar" class="hidden"></div>
-
     <main>
       <section id="tab-market" class="tab"></section>
 
       <section id="tab-portfolio" class="tab hidden">
         <div class="section-title">보유 종목</div>
         <div id="portfolioList"></div>
+      </section>
+
+      <section id="tab-news" class="tab hidden">
+        <div class="section-title">뉴스</div>
+        <div id="newsList"></div>
       </section>
 
       <section id="tab-history" class="tab hidden">
@@ -55,6 +58,7 @@
     <nav id="bottomNav">
       <button data-tab="market" class="active">📊 시세</button>
       <button data-tab="portfolio">💼 포트폴리오</button>
+      <button data-tab="news">📰 뉴스</button>
       <button data-tab="history">📋 내역</button>
     </nav>
   </div>
@@ -93,6 +97,7 @@
     <ol id="finalTop"></ol>
   </div>
 
+  <div id="newsPopup" class="news-popup"></div>
   <div id="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>

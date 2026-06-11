@@ -14,6 +14,8 @@ let stocks = [];               // 종목 메타
 const prices = new Map();      // symbol -> 최신가
 const delistLeft = new Map();
 let game = { status: 'lobby', remainingMs: 0, endsAt: null, settings: { feeRate: 0 } };
+let newsItems = [];            // 뉴스 탭 이력 (최신순)
+const MAX_NEWS_ITEMS = 50;
 let detail = null;             // { symbol, chart, series, feed }
 let side = 'buy';
 
@@ -34,8 +36,10 @@ function applySync(s) {
   game = s.game;
   stocks = s.stocks;
   for (const st of stocks) prices.set(st.symbol, st.price);
+  newsItems = [...(s.newsHistory || s.news || [])].reverse(); // 서버는 과거→최신, 탭은 최신순
   renderGameBadge();
   renderMarket();
+  renderNews();
 }
 
 function showJoin() {
@@ -84,7 +88,8 @@ socket.on(EV.STOCKS, (list) => {
   stocks = list;
   for (const st of stocks) prices.set(st.symbol, st.price);
   renderMarket();
-  if (detail) { renderDetailHead(); renderTradeAvailability(); }
+  if (detail && !stocks.some(s => s.symbol === detail.symbol)) closeDetail(); // 종목 삭제됨
+  else if (detail) { renderDetailHead(); renderTradeAvailability(); }
 });
 
 socket.on(EV.GAME, (g) => {
@@ -101,19 +106,42 @@ socket.on(EV.ME, (state) => {
 });
 
 socket.on(EV.NEWS, (item) => {
-  const bar = $('newsBar');
-  bar.textContent = item.text;
-  bar.className = item.kind === 'alert' ? 'alert' : '';
-  bar.classList.remove('hidden');
-  clearTimeout(bar._t);
-  bar._t = setTimeout(() => bar.classList.add('hidden'), 8000);
+  newsItems.unshift(item);
+  if (newsItems.length > MAX_NEWS_ITEMS) newsItems.pop();
+  renderNews();
+  showNewsPopup(item);
 });
 
 socket.on(EV.NEWS_CLEAR, () => {
-  const bar = $('newsBar');
-  clearTimeout(bar._t);
-  bar.classList.add('hidden');
+  newsItems = [];
+  renderNews();
+  const pop = $('newsPopup');
+  clearTimeout(pop._t);
+  pop.classList.remove('show');
 });
+
+// 새 뉴스 팝업: 잠깐 떠 있다가 자동으로 사라짐
+function showNewsPopup(item) {
+  const pop = $('newsPopup');
+  pop.textContent = item.text;
+  pop.classList.toggle('alert', item.kind === 'alert');
+  pop.classList.add('show');
+  clearTimeout(pop._t);
+  pop._t = setTimeout(() => pop.classList.remove('show'), 5000);
+}
+
+function renderNews() {
+  const wrap = $('newsList');
+  if (newsItems.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">아직 뉴스가 없습니다.</div>';
+    return;
+  }
+  wrap.innerHTML = newsItems.map(n => `
+    <div class="news-row${n.kind === 'alert' ? ' alert' : ''}">
+      <span class="n-text">${esc(n.text)}</span>
+      <span class="time">${fmtClock(n.ts)}</span>
+    </div>`).join('');
+}
 
 socket.on(EV.FINAL, ({ rankings }) => {
   closeDetail();
@@ -276,6 +304,7 @@ for (const btn of document.querySelectorAll('#bottomNav button')) {
     for (const tab of document.querySelectorAll('.tab')) tab.classList.add('hidden');
     $('tab-' + btn.dataset.tab).classList.remove('hidden');
     if (btn.dataset.tab === 'portfolio') renderPortfolio();
+    if (btn.dataset.tab === 'news') renderNews();
     if (btn.dataset.tab === 'history') renderHistory();
   });
 }

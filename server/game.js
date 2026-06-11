@@ -87,6 +87,31 @@ export class Game {
     return { ok: true };
   }
 
+  removeStock(symbol) {
+    const s = this.stocks.get(String(symbol || '').toUpperCase());
+    if (!s) return { ok: false, error: '없는 종목' };
+    // 보유자가 있으면 현재가로 강제 매도(수수료 없음). 상폐 종목은 0원이므로 그냥 소멸.
+    const price = s.delisted ? 0 : Math.round(s.price);
+    let sold = false;
+    for (const p of this.players.values()) {
+      const h = p.holdings[s.symbol];
+      if (!h) continue;
+      if (price > 0) {
+        p.cash += price * h.qty;
+        p.trades.unshift({ id: rid(6), ts: now(), symbol: s.symbol, name: s.name, side: 'sell', qty: h.qty, price, fee: 0 });
+        if (p.trades.length > MAX_TRADES) p.trades.pop();
+        sold = true;
+      }
+      delete p.holdings[s.symbol];
+      this.emitMe(p);
+    }
+    this.stocks.delete(s.symbol);
+    this.addNews(`🗑 ${s.name}(${s.symbol}) 종목 삭제${sold ? ' — 보유분은 현재가로 자동 매도되었습니다' : ''}`, 'info');
+    this.broadcastStocks();
+    this.scheduleLeaderboard();
+    return { ok: true };
+  }
+
   haltStock(symbol, halted) {
     const s = this.stocks.get(symbol);
     if (!s || s.delisted) return { ok: false, error: '없는 종목이거나 상장폐지됨' };
@@ -439,6 +464,7 @@ export class Game {
       p.trades = [];
     }
     if (!opts.silent) {
+      this.io.emit(EV.NEWS_CLEAR, {}); // 클라이언트가 쌓아둔 뉴스 이력도 초기화
       this.addNews('🔄 게임이 리셋되었습니다. 곧 새 게임이 시작됩니다!', 'alert');
       this.broadcastStocks();
       this.broadcastGame();
@@ -551,6 +577,7 @@ export class Game {
       stocks: this.stockList(),
       sparks: Object.fromEntries([...this.stocks.values()].map(s => [s.symbol, s.spark])),
       news: this.news.filter(n => now() - n.ts < NEWS_TTL_MS).slice(-5),
+      newsHistory: this.news, // 참가자 뉴스 탭용 전체 이력 (최근 MAX_NEWS개)
       leaderboard: { top: this.rankings().slice(0, 10).map(({ token, ...r }) => r), totalPlayers: this.players.size },
     };
   }
