@@ -18,7 +18,7 @@ export function fmtClock(ts) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
 
-export const STATUS_LABEL = { lobby: '대기 중', running: '진행 중', paused: '일시정지', ended: '종료' };
+export const STATUS_LABEL = { lobby: '대기 중', running: '진행 중', paused: '일시정지', intermission: '휴장', ended: '종료' };
 
 // 한국식 색상: 상승 빨강 / 하락 파랑
 export const CHART_COLORS = {

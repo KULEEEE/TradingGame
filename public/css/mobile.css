@@ -33,6 +33,7 @@ button.primary {
 .game-badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--panel2); margin-left: auto; }
 .game-badge.running { color: var(--good); }
 .game-badge.paused { color: var(--accent); animation: blink 1.2s infinite; }
+.game-badge.intermission { color: var(--accent); }
 .game-badge.ended { color: var(--up); }
 .game-timer { font-size: 14px; font-weight: 700; }
 #myHeader .row2 { display: flex; gap: 8px; }

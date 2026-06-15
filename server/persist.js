@@ -4,8 +4,10 @@ import path from 'node:path';
 
 const FILE = 'state.json';
 
+// 기본은 프로젝트 루트의 state.json. STATE_FILE 환경변수로 경로를 바꿀 수 있다
+// (예: 동시에 두 서버를 띄우는 검증/테스트 시 상태파일 충돌 방지).
 export function snapshotPath(root) {
-  return path.join(root, FILE);
+  return process.env.STATE_FILE || path.join(root, FILE);
 }
 
 /** 부팅 시 1회만 동기 로드 */

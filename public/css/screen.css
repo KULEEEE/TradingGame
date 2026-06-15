@@ -20,7 +20,9 @@ body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 }
 .status-pill.running { color: var(--good); border-color: var(--good); }
 .status-pill.paused  { color: var(--accent); border-color: var(--accent); animation: blink 1.2s infinite; }
+.status-pill.intermission { color: var(--accent); border-color: var(--accent); animation: blink 1.6s infinite; }
 .status-pill.ended   { color: var(--up); border-color: var(--up); }
+.day-info { font-size: 20px; font-weight: 800; color: var(--accent); padding: 0 6px; }
 .timer { margin-left: auto; font-size: 46px; font-weight: 800; letter-spacing: 2px; }
 .timer.urgent { color: var(--up); animation: blink 1s infinite; }
 

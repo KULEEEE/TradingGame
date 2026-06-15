@@ -152,7 +152,12 @@ function renderGame() {
   const pill = $('gameStatus');
   pill.textContent = STATUS_LABEL[game.status] || game.status;
   pill.className = 'status-pill ' + game.status;
+  // 거래일 표시
+  const total = game.totalDays ?? game.settings?.totalDays ?? 1;
+  $('dayInfo').textContent = game.currentDay ? `${game.currentDay}일차 / ${total}일` : (total > 1 ? `총 ${total} 거래일` : '');
   $('pausedOverlay').classList.toggle('hidden', game.status !== 'paused');
+  $('intermissionOverlay').classList.toggle('hidden', game.status !== 'intermission');
+  if (game.status === 'intermission') $('interDay').textContent = `(${game.currentDay}일차)`;
   if (game.status !== 'ended') $('finalOverlay').classList.add('hidden');
 }
 

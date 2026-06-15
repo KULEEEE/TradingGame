@@ -1,11 +1,11 @@
-import { EV } from '/shared/events.js';
+import { EV, TREND_PRESETS, VOL_PRESETS } from '/shared/events.js';
 import { fmtWon, fmtPct, pctClass, changePct, fmtTime, STATUS_LABEL, emitAck } from '/js/common.js';
 
 const $ = (id) => document.getElementById(id);
 const socket = io();
 
 const PW_KEY = 'tg_admin_pw';
-let game = { status: 'lobby', remainingMs: 0, endsAt: null, settings: {} };
+let game = { status: 'lobby', remainingMs: 0, endsAt: null, settings: {}, currentDay: 0, totalDays: 1 };
 let stocks = [];
 const prices = new Map();
 let loggedIn = false;
@@ -69,10 +69,17 @@ function renderGame() {
   const pill = $('gameStatus');
   pill.textContent = STATUS_LABEL[game.status];
   pill.className = 'status-pill ' + game.status;
+  // 거래일 표시
+  const total = game.totalDays ?? game.settings?.totalDays ?? 1;
+  $('dayInfo').textContent = game.currentDay ? `${game.currentDay} / ${total} 거래일${game.status === 'intermission' ? ' · 휴장' : ''}` : `총 ${total} 거래일`;
+  // 다음날 개장 버튼은 휴장 중에만
+  $('btnNextDay').style.display = game.status === 'intermission' ? '' : 'none';
   if (!settingsLoaded && game.settings) {
     $('setCash').value = game.settings.initialCash;
+    $('setDays').value = game.settings.totalDays ?? 1;
     $('setDuration').value = game.settings.durationMin;
     $('setFee').value = (game.settings.feeRate * 100).toFixed(2);
+    if (game.tickSec != null) $('setTick').value = game.tickSec;
     settingsLoaded = true;
   }
 }
@@ -83,6 +90,10 @@ async function gameAction(action, confirmMsg) {
   if (!r.ok) toast(r.error, 'err');
 }
 $('btnStart').addEventListener('click', () => gameAction('start'));
+$('btnNextDay').addEventListener('click', async () => {
+  const r = await emitAck(socket, EV.ADMIN_NEXT_DAY);
+  if (!r.ok) toast(r.error, 'err');
+});
 $('btnPause').addEventListener('click', () => gameAction('pause'));
 $('btnResume').addEventListener('click', () => gameAction('resume'));
 $('btnEnd').addEventListener('click', () => gameAction('end', '게임을 종료하고 최종 순위를 발표할까요?'));
@@ -91,8 +102,10 @@ $('btnReset').addEventListener('click', () => gameAction('reset', '모든 참가
 $('btnSettings').addEventListener('click', async () => {
   const r = await emitAck(socket, EV.ADMIN_SETTINGS, {
     initialCash: Number($('setCash').value),
+    totalDays: Number($('setDays').value),
     durationMin: Number($('setDuration').value),
     feeRate: Number($('setFee').value) / 100,
+    tickSec: Number($('setTick').value),
   });
   toast(r.ok ? '설정이 적용되었습니다' : r.error, r.ok ? 'ok' : 'err');
 });
@@ -144,7 +157,7 @@ function renderStockTable() {
     if (st.delisted) {
       tr.innerHTML = `
         <td><span class="cell-name">${esc(st.name)}</span> <span class="cell-sym">${st.symbol}</span></td>
-        <td colspan="8"><span class="badge delist">상장폐지</span></td><td></td>
+        <td colspan="9"><span class="badge delist">상장폐지</span></td><td></td>
         <td>${removeBtn}</td>`;
       bindRemove();
       tbody.appendChild(tr);
@@ -156,6 +169,14 @@ function renderStockTable() {
           ${st.delistIn != null ? '<span class="badge warning">상폐중</span>' : ''}</td>
       <td class="c-price"></td>
       <td class="c-chg"></td>
+      <td class="scenario-cell">
+        ${activeTrendBadge(st)}
+        <div class="next-trend">
+          <span class="next-lbl">다음날</span>
+          <select class="i-trend">${trendOptions(st.scenario?.trend)}</select>
+          <select class="i-svol">${volOptions(st.scenario?.vol)}</select>
+        </div>
+      </td>
       <td><input class="i-vol" type="number" step="0.001" value="${st.volatility}"></td>
       <td><input class="i-drift" type="number" step="0.0001" value="${st.drift}"></td>
       <td><button class="mini b-apply">적용</button></td>
@@ -173,6 +194,13 @@ function renderStockTable() {
     bindRemove();
 
     const sym = st.symbol;
+    const sendScenario = () => emitAck(socket, EV.ADMIN_SCENARIO, {
+      symbol: sym,
+      trend: tr.querySelector('.i-trend').value,
+      vol: tr.querySelector('.i-svol').value,
+    }).then(r => { if (!r.ok) toast(r.error, 'err'); });
+    tr.querySelector('.i-trend').addEventListener('change', sendScenario);
+    tr.querySelector('.i-svol').addEventListener('change', sendScenario);
     tr.querySelector('.b-apply').addEventListener('click', async () => {
       const r = await emitAck(socket, EV.ADMIN_STOCK_UPDATE, {
         symbol: sym,
@@ -266,4 +294,24 @@ function toast(msg, kind = '') {
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// 현재 거래일에 적용 중인 추세 배지 (읽기전용). 예약(다음날)과 다르면 변경 예약 표시.
+function activeTrendBadge(st) {
+  const a = st.dayScenario;
+  if (!a) return '<span class="cur-trend none">대기</span>';
+  const t = TREND_PRESETS[a.trend] || TREND_PRESETS.flat;
+  const v = VOL_PRESETS[a.vol] || VOL_PRESETS.mid;
+  const changed = st.scenario && (st.scenario.trend !== a.trend || st.scenario.vol !== a.vol);
+  return `<span class="cur-trend" title="이번 거래일 적용 중">현재 ${t.emoji} ${t.label}·${v.label}</span>${changed ? '<span class="trend-resv">다음날 변경 예약됨</span>' : ''}`;
+}
+
+// 시나리오 프리셋 <option> 생성
+function trendOptions(sel = 'flat') {
+  return Object.entries(TREND_PRESETS).map(([k, v]) =>
+    `<option value="${k}"${k === sel ? ' selected' : ''}>${v.emoji} ${v.label}</option>`).join('');
+}
+function volOptions(sel = 'mid') {
+  return Object.entries(VOL_PRESETS).map(([k, v]) =>
+    `<option value="${k}"${k === sel ? ' selected' : ''}>변동성 ${v.label}</option>`).join('');
 }

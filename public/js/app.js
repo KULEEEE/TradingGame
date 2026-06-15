@@ -199,7 +199,8 @@ function renderHeaderStats() {
 
 function renderGameBadge() {
   const b = $('gameBadge');
-  b.textContent = STATUS_LABEL[game.status];
+  const day = game.currentDay && (game.totalDays > 1) ? ` ${game.currentDay}/${game.totalDays}일` : '';
+  b.textContent = STATUS_LABEL[game.status] + day;
   b.className = 'game-badge ' + game.status;
 }
 setInterval(() => {
@@ -417,6 +418,7 @@ function renderTradeAvailability() {
   let msg = null;
   if (game.status === 'lobby') msg = '게임 시작 전입니다 — 시작하면 거래할 수 있어요';
   else if (game.status === 'paused') msg = '장 일시정지 중입니다';
+  else if (game.status === 'intermission') msg = '휴장 중입니다 — 다음 거래일 개장을 기다려주세요';
   else if (game.status === 'ended') msg = '게임이 종료되었습니다';
   else if (st?.delisted) msg = '상장폐지된 종목입니다';
   else if (st?.halted) msg = '거래정지 종목입니다';

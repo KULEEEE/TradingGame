@@ -23,6 +23,7 @@
     <header>
       <h1>🎛 관리자</h1>
       <span id="gameStatus" class="status-pill"></span>
+      <span id="dayInfo" class="muted"></span>
       <span id="timer" class="timer"></span>
       <span id="playerCount" class="muted"></span>
     </header>
@@ -33,6 +34,7 @@
         <h2>게임 제어</h2>
         <div class="btn-row">
           <button id="btnStart" class="good">▶ 시작</button>
+          <button id="btnNextDay" class="good">⏭ 다음날 개장</button>
           <button id="btnPause" class="warn">⏸ 서킷브레이커</button>
           <button id="btnResume" class="good">▶ 재개</button>
           <button id="btnEnd" class="danger">🏁 종료</button>
@@ -40,10 +42,13 @@
         </div>
         <div class="settings-row">
           <label>초기자금 <input id="setCash" type="number" step="100000"></label>
-          <label>게임시간(분) <input id="setDuration" type="number" min="1"></label>
+          <label>총 거래일 <input id="setDays" type="number" min="1" max="30" step="1"></label>
+          <label>하루 장(분) <input id="setDuration" type="number" min="1"></label>
           <label>수수료율(%) <input id="setFee" type="number" step="0.01" min="0"></label>
+          <label>가격틱(초) <input id="setTick" type="number" min="1" max="60" step="1"></label>
           <button id="btnSettings">설정 적용</button>
         </div>
+        <p class="muted hint">휴장(장 마감) 중 아래 종목별 <b>다음날 추세</b>를 세팅한 뒤 <b>다음날 개장</b>을 누르세요.</p>
       </section>
 
       <!-- 전체 시장 이벤트 / 뉴스 -->
@@ -84,7 +89,8 @@
         <table id="stockTable">
           <thead>
             <tr>
-              <th>종목</th><th>현재가</th><th>등락률</th>
+              <th>종목</th><th>현재가</th><th>등락률<br><span class="th-sub">전일대비</span></th>
+              <th>다음날 추세</th>
               <th>변동성 σ</th><th>드리프트 μ</th><th></th>
               <th>급등/급락</th><th>즉시 점프</th><th>정지</th><th>상폐</th><th>삭제</th>
             </tr>

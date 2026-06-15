@@ -11,6 +11,7 @@
   <header id="topbar">
     <div class="brand">📈 워크샵 모의투자</div>
     <div id="gameStatus" class="status-pill">대기 중</div>
+    <div id="dayInfo" class="day-info"></div>
     <div id="timer" class="timer">--:--</div>
   </header>
 
@@ -46,6 +47,11 @@
   <!-- 서킷브레이커 오버레이 -->
   <div id="pausedOverlay" class="overlay center hidden">
     <div class="big-msg">⏸ 장 일시정지<br><span class="sub">서킷브레이커 발동 — 잠시 후 재개됩니다</span></div>
+  </div>
+
+  <!-- 휴장(장 마감) 오버레이 -->
+  <div id="intermissionOverlay" class="overlay center hidden">
+    <div class="big-msg">🔔 장 마감 <span id="interDay"></span><br><span class="sub">휴장 — 다음 거래일을 준비 중입니다</span></div>
   </div>
 
   <!-- 상폐 카운트다운 배너 -->

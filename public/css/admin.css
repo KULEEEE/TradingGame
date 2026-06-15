@@ -10,7 +10,16 @@ header h1 { font-size: 22px; }
 .status-pill { font-weight: 700; padding: 4px 14px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); }
 .status-pill.running { color: var(--good); border-color: var(--good); }
 .status-pill.paused { color: var(--accent); border-color: var(--accent); }
+.status-pill.intermission { color: var(--accent); border-color: var(--accent); }
 .status-pill.ended { color: var(--up); border-color: var(--up); }
+.th-sub { font-size: 10px; font-weight: 600; color: var(--muted); }
+.scenario-cell { white-space: nowrap; }
+.scenario-cell select { font-size: 12px; padding: 2px 4px; margin: 1px 0; display: block; }
+.cur-trend { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--border); }
+.cur-trend.none { color: var(--muted); font-weight: 600; }
+.trend-resv { display: block; font-size: 10px; color: var(--accent); margin-top: 1px; }
+.next-trend { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
+.next-lbl { font-size: 10px; color: var(--muted); }
 .timer { font-size: 24px; font-weight: 800; }
 
 main { padding: 18px 22px; display: flex; flex-direction: column; gap: 18px; max-width: 1280px; margin: 0 auto; }

@@ -188,6 +188,8 @@ io.on('connection', (socket) => {
   socket.on(EV.ADMIN_NEWS_CLEAR, admin(() => game.clearNews()));
   socket.on(EV.ADMIN_KICK, admin(p => game.kick(p.token)));
   socket.on(EV.ADMIN_STATE, admin(() => game.adminState()));
+  socket.on(EV.ADMIN_SCENARIO, admin(p => game.setScenario(p.symbol, p.trend, p.vol)));
+  socket.on(EV.ADMIN_NEXT_DAY, admin(() => game.nextDay()));
 });
 
 // ───────────────────────── 기동 ─────────────────────────
