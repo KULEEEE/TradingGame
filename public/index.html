@@ -13,9 +13,10 @@
   <div id="joinView" class="view hidden">
     <div class="join-card">
       <h1>📈 워크샵 모의투자</h1>
-      <p class="muted">닉네임을 입력하고 가상 자금으로<br>최고의 수익률에 도전하세요!</p>
+      <p class="muted">닉네임과 비밀번호로 참가하세요.<br>같은 닉네임·비밀번호로 다시 입장할 수 있습니다.</p>
       <input id="nickInput" maxlength="12" placeholder="닉네임 (1~12자)" autocomplete="off">
-      <button id="joinBtn" class="primary">참가하기</button>
+      <input id="pwInput" type="password" maxlength="32" placeholder="비밀번호" autocomplete="off">
+      <button id="joinBtn" class="primary">참가 / 재입장</button>
       <p id="joinErr" class="err-msg"></p>
     </div>
   </div>
@@ -73,6 +74,10 @@
       </div>
       <div id="detailBadge"></div>
     </div>
+    <div class="chart-modes">
+      <button id="modeCandle" class="chart-mode active" data-mode="candle">캔들</button>
+      <button id="modeLine" class="chart-mode" data-mode="line">라인</button>
+    </div>
     <div id="detailChart"></div>
     <div id="myPosition" class="position hidden"></div>
     <div class="trade-panel">
@@ -82,7 +87,12 @@
       </div>
       <div class="qty-row">
         <input id="qtyInput" type="number" inputmode="numeric" min="1" placeholder="수량">
-        <button id="maxBtn">최대</button>
+        <button id="maxBtn">전액</button>
+      </div>
+      <div class="qty-quick">
+        <button data-pct="25">25%</button>
+        <button data-pct="50">50%</button>
+        <button data-pct="75">75%</button>
       </div>
       <div class="estimate"><span class="muted">예상 체결 금액</span><b id="estAmount">0원</b></div>
       <button id="orderBtn" class="order buy">매수하기</button>

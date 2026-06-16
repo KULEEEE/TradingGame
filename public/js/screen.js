@@ -1,7 +1,7 @@
 import { EV } from '/shared/events.js';
 import {
   fmtWon, fmtNum, fmtPct, pctClass, changePct, fmtTime, STATUS_LABEL,
-  createCandleChart, setCandles, makeCandleFeed, drawSpark, emitAck, CHART_COLORS,
+  createChart, addPriceSeries, setSeriesData, makeFeed, applyLineColor, applyDayMarks, drawSpark, emitAck, CHART_COLORS,
 } from '/js/common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +13,8 @@ const prices = new Map();        // symbol -> 최신가
 const sparks = new Map();        // symbol -> 가격 포인트 배열
 const delistLeft = new Map();    // symbol -> 남은 초
 let newsItems = [];
-let chartOpen = null;            // { symbol, chart, series, feed }
+let chartOpen = null;            // { symbol, chart, series, candles, feed }
+let chartMode = localStorage.getItem('tg_chartMode') || 'candle'; // 'candle' | 'line'
 
 // ───────── 초기 동기화 ─────────
 socket.on('connect', async () => {
@@ -44,6 +45,7 @@ socket.on(EV.TICK, ({ ts, prices: p, delist }) => {
     sparks.set(sym, arr);
     if (chartOpen && chartOpen.symbol === sym) {
       chartOpen.feed(ts, price);
+      if (chartMode === 'line') applyLineColor(chartOpen.series, price, stocks.find(s => s.symbol === sym)?.basePrice);
       $('chartPrice').textContent = fmtWon(price);
     }
   }
@@ -57,7 +59,21 @@ socket.on(EV.STOCKS, (list) => {
   renderGrid();
 });
 
-socket.on(EV.GAME, (g) => { game = g; renderGame(); });
+socket.on(EV.GAME, (g) => {
+  const prevDay = game.currentDay;
+  game = g;
+  renderGame();
+  if (chartOpen && g.currentDay !== prevDay) refreshDayMarks();
+});
+
+// 거래일이 바뀌면 차트 마커를 다시 받아 갱신
+async function refreshDayMarks() {
+  if (!chartOpen) return;
+  const res = await emitAck(socket, EV.CHART, { symbol: chartOpen.symbol });
+  if (!res.ok) return;
+  chartOpen.dayMarks = res.dayMarks || [];
+  applyDayMarks(chartOpen.series, chartOpen.dayMarks, res.candles, res.currentDay ?? game.currentDay);
+}
 
 socket.on(EV.NEWS, (item) => {
   newsItems.push(item);
@@ -200,10 +216,42 @@ async function toggleChart(symbol) {
   $('chartTitle').textContent = `${st.name} (${st.symbol})`;
   $('chartPrice').textContent = fmtWon(res.price);
   $('chartModal').classList.remove('hidden');
-  const { chart, series } = createCandleChart($('bigChart'));
-  setCandles(series, res.candles);
+  const chart = createChart($('bigChart'));
+  const series = addPriceSeries(chart, chartMode);
+  setSeriesData(series, res.candles, chartMode);
+  if (chartMode === 'line') applyLineColor(series, prices.get(symbol) ?? res.price, st.basePrice);
+  applyDayMarks(series, res.dayMarks, res.candles, res.currentDay ?? game.currentDay);
   chart.timeScale().fitContent();
-  chartOpen = { symbol, chart, series, feed: makeCandleFeed(series, res.candles.at(-1), game.candleSec) };
+  chartOpen = { symbol, chart, series, candles: res.candles, dayMarks: res.dayMarks || [], feed: makeFeed(series, res.candles.at(-1), feedBucketSec(chartMode), chartMode) };
+  syncModeButtons();
+}
+
+// 라인은 틱마다(tickSec), 캔들은 봉 주기(candleSec)로 점/봉을 찍는다
+function feedBucketSec(mode) {
+  return mode === 'line' ? (game.tickSec || game.candleSec || 10) : (game.candleSec || 30);
+}
+
+function syncModeButtons() {
+  for (const b of document.querySelectorAll('.chart-mode'))
+    b.classList.toggle('active', b.dataset.mode === chartMode);
+}
+async function setChartMode(mode) {
+  if (mode === chartMode) return;
+  chartMode = mode;
+  localStorage.setItem('tg_chartMode', mode);
+  syncModeButtons();
+  if (!chartOpen) return;
+  const res = await emitAck(socket, EV.CHART, { symbol: chartOpen.symbol });
+  const candles = res.ok ? res.candles : chartOpen.candles;
+  chartOpen.chart.removeSeries(chartOpen.series);
+  chartOpen.series = addPriceSeries(chartOpen.chart, mode);
+  setSeriesData(chartOpen.series, candles, mode);
+  if (mode === 'line') applyLineColor(chartOpen.series, prices.get(chartOpen.symbol) ?? res.price, stocks.find(s => s.symbol === chartOpen.symbol)?.basePrice);
+  applyDayMarks(chartOpen.series, res.dayMarks ?? chartOpen.dayMarks, candles, res.currentDay ?? game.currentDay);
+  chartOpen.candles = candles;
+  if (res.dayMarks) chartOpen.dayMarks = res.dayMarks;
+  chartOpen.feed = makeFeed(chartOpen.series, candles.at(-1), feedBucketSec(mode), mode);
+  chartOpen.chart.timeScale().fitContent();
 }
 
 function closeChart() {
@@ -213,7 +261,12 @@ function closeChart() {
   $('chartModal').classList.add('hidden');
   $('bigChart').innerHTML = '';
 }
+// 차트 박스 내부 클릭은 닫지 않음 — 바깥(배경) 클릭 또는 ✕ 버튼으로만 닫힌다
 $('chartModal').addEventListener('click', closeChart);
+document.querySelector('.chart-box').addEventListener('click', (e) => e.stopPropagation());
+$('chartClose').addEventListener('click', (e) => { e.stopPropagation(); closeChart(); });
+for (const b of document.querySelectorAll('.chart-mode'))
+  b.addEventListener('click', () => setChartMode(b.dataset.mode));
 
 // ───────── 타이머 ─────────
 setInterval(() => {

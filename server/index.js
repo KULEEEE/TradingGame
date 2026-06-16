@@ -127,7 +127,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on(EV.JOIN, (p, cb) => {
-    const r = game.join(p?.nickname);
+    const r = game.join(p?.nickname, p?.password);
     if (r.ok) {
       socket.data.token = r.token;
       socket.join('p:' + r.token);

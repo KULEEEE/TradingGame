@@ -1,7 +1,7 @@
 import { EV } from '/shared/events.js';
 import {
   fmtWon, fmtNum, fmtPct, pctClass, changePct, fmtTime, fmtClock, STATUS_LABEL,
-  createCandleChart, setCandles, makeCandleFeed, emitAck,
+  createChart, addPriceSeries, setSeriesData, makeFeed, applyLineColor, applyDayMarks, emitAck,
 } from '/js/common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -16,8 +16,9 @@ const delistLeft = new Map();
 let game = { status: 'lobby', remainingMs: 0, endsAt: null, settings: { feeRate: 0 } };
 let newsItems = [];            // 뉴스 탭 이력 (최신순)
 const MAX_NEWS_ITEMS = 50;
-let detail = null;             // { symbol, chart, series, feed }
+let detail = null;             // { symbol, chart, series, candles, feed }
 let side = 'buy';
+let chartMode = localStorage.getItem('tg_chartMode') || 'candle'; // 'candle' | 'line'
 
 // ───────── 접속 / 복구 ─────────
 socket.on('connect', async () => {
@@ -54,17 +55,22 @@ function showApp() {
 }
 
 $('joinBtn').addEventListener('click', join);
-$('nickInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+$('nickInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pwInput').focus(); });
+$('pwInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
 async function join() {
   const nickname = $('nickInput').value.trim();
+  const password = $('pwInput').value;
   if (!nickname) return ($('joinErr').textContent = '닉네임을 입력하세요');
-  const r = await emitAck(socket, EV.JOIN, { nickname });
+  if (!password) return ($('joinErr').textContent = '비밀번호를 입력하세요');
+  const r = await emitAck(socket, EV.JOIN, { nickname, password });
   if (!r.ok) return ($('joinErr').textContent = r.error);
   token = r.token;
   localStorage.setItem(TOKEN_KEY, token);
   me = r.player;
   showApp();
-  toast(`환영합니다, ${nickname}님! ${fmtWon(me.cash)} 지급 완료 💰`, 'ok');
+  toast(r.rejoined
+    ? `다시 오신 걸 환영합니다, ${nickname}님! (평가액 ${fmtWon(me.total)})`
+    : `환영합니다, ${nickname}님! ${fmtWon(me.cash)} 지급 완료 💰`, 'ok');
 }
 
 // ───────── 실시간 이벤트 ─────────
@@ -75,6 +81,7 @@ socket.on(EV.TICK, ({ ts, prices: p, delist }) => {
     prices.set(sym, price);
     if (detail && detail.symbol === sym) {
       detail.feed(ts, price);
+      if (chartMode === 'line') applyLineColor(detail.series, price, curStock()?.basePrice);
       renderDetailHead();
       renderEstimate();
     }
@@ -93,11 +100,24 @@ socket.on(EV.STOCKS, (list) => {
 });
 
 socket.on(EV.GAME, (g) => {
+  const prevDay = game.currentDay;
   game = g;
   renderGameBadge();
-  if (detail) renderTradeAvailability();
+  if (detail) {
+    renderTradeAvailability();
+    if (g.currentDay !== prevDay) refreshDayMarks(); // 새 거래일 개장 → 마커 갱신
+  }
   if (game.status !== 'ended') $('finalSheet').classList.add('hidden');
 });
+
+// 거래일이 바뀌면 차트 마커를 다시 받아 갱신
+async function refreshDayMarks() {
+  if (!detail) return;
+  const res = await emitAck(socket, EV.CHART, { symbol: detail.symbol });
+  if (!res.ok) return;
+  detail.dayMarks = res.dayMarks || [];
+  applyDayMarks(detail.series, detail.dayMarks, res.candles, res.currentDay ?? game.currentDay);
+}
 
 socket.on(EV.ME, (state) => {
   me = state;
@@ -310,6 +330,11 @@ for (const btn of document.querySelectorAll('#bottomNav button')) {
   });
 }
 
+// 라인은 틱마다(tickSec), 캔들은 봉 주기(candleSec)로 점/봉을 찍는다
+function feedBucketSec(mode) {
+  return mode === 'line' ? (game.tickSec || game.candleSec || 10) : (game.candleSec || 30);
+}
+
 // ───────── 종목 상세 / 주문 ─────────
 async function openDetail(symbol) {
   const st = stocks.find(s => s.symbol === symbol);
@@ -317,12 +342,14 @@ async function openDetail(symbol) {
   closeDetail();
   $('detailSheet').classList.remove('hidden');
   const res = await emitAck(socket, EV.CHART, { symbol });
-  const { chart, series } = createCandleChart($('detailChart'));
-  if (res.ok) {
-    setCandles(series, res.candles);
-    chart.timeScale().fitContent();
-  }
-  detail = { symbol, chart, series, feed: makeCandleFeed(series, res.ok ? res.candles.at(-1) : null, game.candleSec) };
+  const candles = res.ok ? res.candles : [];
+  const chart = createChart($('detailChart'));
+  const series = addPriceSeries(chart, chartMode);
+  setSeriesData(series, candles, chartMode);
+  if (chartMode === 'line') applyLineColor(series, prices.get(symbol) ?? st.price, st.basePrice);
+  applyDayMarks(series, res.dayMarks, candles, res.currentDay ?? game.currentDay);
+  chart.timeScale().fitContent();
+  detail = { symbol, chart, series, candles, dayMarks: res.dayMarks || [], feed: makeFeed(series, candles.at(-1), feedBucketSec(chartMode), chartMode) };
   side = 'buy';
   setSide('buy');
   $('qtyInput').value = '';
@@ -338,6 +365,34 @@ function closeDetail() {
   $('detailSheet').classList.add('hidden');
 }
 $('detailBack').addEventListener('click', closeDetail);
+
+// 차트 모드(캔들/라인) 토글
+function syncModeButtons() {
+  for (const b of document.querySelectorAll('.chart-mode'))
+    b.classList.toggle('active', b.dataset.mode === chartMode);
+}
+async function setChartMode(mode) {
+  if (mode === chartMode) return;
+  chartMode = mode;
+  localStorage.setItem('tg_chartMode', mode);
+  syncModeButtons();
+  if (!detail) return;
+  // 현재 봉까지 포함된 최신 데이터로 다시 그린다
+  const res = await emitAck(socket, EV.CHART, { symbol: detail.symbol });
+  const candles = res.ok ? res.candles : detail.candles;
+  detail.chart.removeSeries(detail.series);
+  detail.series = addPriceSeries(detail.chart, mode);
+  setSeriesData(detail.series, candles, mode);
+  if (mode === 'line') applyLineColor(detail.series, prices.get(detail.symbol) ?? curStock()?.price, curStock()?.basePrice);
+  applyDayMarks(detail.series, res.dayMarks ?? detail.dayMarks, candles, res.currentDay ?? game.currentDay);
+  detail.candles = candles;
+  if (res.dayMarks) detail.dayMarks = res.dayMarks;
+  detail.feed = makeFeed(detail.series, candles.at(-1), feedBucketSec(mode), mode);
+  detail.chart.timeScale().fitContent();
+}
+for (const b of document.querySelectorAll('.chart-mode'))
+  b.addEventListener('click', () => setChartMode(b.dataset.mode));
+syncModeButtons();
 
 function curStock() { return stocks.find(s => s.symbol === detail?.symbol); }
 function curPrice() { return prices.get(detail?.symbol) ?? curStock()?.price ?? 0; }
@@ -385,20 +440,26 @@ function setSide(s) {
 $('sideBuy').addEventListener('click', () => setSide('buy'));
 $('sideSell').addEventListener('click', () => setSide('sell'));
 
-$('maxBtn').addEventListener('click', () => {
+// 매수: 현금으로 살 수 있는 최대 수량 / 매도: 보유 수량
+function maxQty() {
   const price = curPrice();
-  if (!price || !me) return;
-  let qty;
+  if (!price || !me) return 0;
   if (side === 'buy') {
     const fee = game.settings?.feeRate || 0;
-    qty = Math.floor(me.cash / (price * (1 + fee)));
+    let qty = Math.floor(me.cash / (price * (1 + fee)));
     while (qty > 0 && qty * price + Math.floor(qty * price * fee) > me.cash) qty--;
-  } else {
-    qty = me.holdings.find(x => x.symbol === detail?.symbol)?.qty || 0;
+    return Math.max(0, qty);
   }
+  return me.holdings.find(x => x.symbol === detail?.symbol)?.qty || 0;
+}
+function fillQty(fraction) {
+  const qty = Math.floor(maxQty() * fraction);
   $('qtyInput').value = qty > 0 ? qty : '';
   renderEstimate();
-});
+}
+$('maxBtn').addEventListener('click', () => fillQty(1));
+for (const b of document.querySelectorAll('.qty-quick button'))
+  b.addEventListener('click', () => fillQty(Number(b.dataset.pct) / 100));
 
 $('qtyInput').addEventListener('input', renderEstimate);
 

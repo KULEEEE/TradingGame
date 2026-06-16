@@ -27,11 +27,12 @@ export const CHART_COLORS = {
   bg: '#0d111c',
   grid: '#1c2333',
   text: '#8b95a9',
+  accent: '#ffd166',
 };
 
-/** lightweight-charts 캔들차트 생성 (v4/v5 API 모두 대응) */
-export function createCandleChart(el) {
-  const chart = LightweightCharts.createChart(el, {
+/** lightweight-charts 차트 생성 (v4/v5 API 모두 대응). 시리즈는 addPriceSeries로 별도 추가 */
+export function createChart(el) {
+  return LightweightCharts.createChart(el, {
     layout: { background: { type: 'solid', color: CHART_COLORS.bg }, textColor: CHART_COLORS.text, fontSize: 12 },
     grid: {
       vertLines: { color: CHART_COLORS.grid },
@@ -42,30 +43,125 @@ export function createCandleChart(el) {
     crosshair: { mode: 0 },
     autoSize: true,
   });
+}
+
+/** 모드별 가격 시리즈 추가. mode: 'candle' | 'line' */
+export function addPriceSeries(chart, mode = 'candle') {
+  if (mode === 'line') {
+    const opts = { color: CHART_COLORS.up, lineWidth: 2, priceLineVisible: true, lastValueVisible: true };
+    return chart.addLineSeries ? chart.addLineSeries(opts) : chart.addSeries(LightweightCharts.LineSeries, opts);
+  }
   const opts = {
     upColor: CHART_COLORS.up, downColor: CHART_COLORS.down,
     borderUpColor: CHART_COLORS.up, borderDownColor: CHART_COLORS.down,
     wickUpColor: CHART_COLORS.up, wickDownColor: CHART_COLORS.down,
   };
-  const series = chart.addCandlestickSeries
-    ? chart.addCandlestickSeries(opts)
-    : chart.addSeries(LightweightCharts.CandlestickSeries, opts);
-  return { chart, series };
+  return chart.addCandlestickSeries ? chart.addCandlestickSeries(opts) : chart.addSeries(LightweightCharts.CandlestickSeries, opts);
 }
 
-/** 서버 캔들(epoch초)을 KST 보정해서 차트에 세팅 */
-export function setCandles(series, candles) {
-  series.setData(candles.map(c => ({ ...c, time: c.time + KST })));
+// ── 거래일 경계 세로선 (커스텀 시리즈 프리미티브) ──
+class VertLinePaneView {
+  constructor(src) { this._src = src; this._x = null; }
+  update() { this._x = this._src._chart?.timeScale().timeToCoordinate(this._src._time) ?? null; }
+  zOrder() { return 'top'; }
+  renderer() {
+    const x = this._x, color = this._src._color, text = this._src._text;
+    return {
+      draw: (target) => target.useMediaCoordinateSpace((scope) => {
+        if (x === null) return;
+        const ctx = scope.context;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, scope.mediaSize.height);
+        ctx.stroke();
+        if (text) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = color;
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(text, x + 4, 12);
+        }
+        ctx.restore();
+      }),
+    };
+  }
+}
+class VertLine {
+  constructor(time, color, text) { this._time = time; this._color = color; this._text = text; this._chart = null; this._views = [new VertLinePaneView(this)]; }
+  attached(p) { this._chart = p.chart; }
+  detached() { this._chart = null; }
+  updateAllViews() { this._views.forEach(v => v.update()); }
+  paneViews() { return this._views; }
 }
 
 /**
- * 틱 → 캔들 실시간 집계 피더. 봉 주기(candleSec)는 game 페이로드에서 내려온다.
- * 서버는 가격 변경분(tick)만 보내므로 현재 봉은 클라이언트에서 만든다.
+ * 거래일 경계(세로선, 전 거래일) + 시초가(가로선, 현재 거래일만)를 시리즈에 표시.
+ * dayMarks=[{day,time(epoch초),open}]. currentDay 일차의 시초가만 가로선으로 그린다.
+ * 세로선 시각은 실제 데이터 포인트 시각으로 스냅한다(라인 이력도 candles 시각이라 두 모드 공통).
+ * 재호출 시 이전에 그린 선들을 먼저 제거한다.
  */
-export function makeCandleFeed(series, lastCandle, candleSec = 60) {
+export function applyDayMarks(series, dayMarks, candles, currentDay) {
+  const prev = series.__dayLines;
+  if (prev) {
+    prev.vert.forEach(v => { try { series.detachPrimitive(v); } catch { /* 이미 제거됨 */ } });
+    prev.horiz.forEach(h => { try { series.removePriceLine(h); } catch { /* 이미 제거됨 */ } });
+  }
+  const store = { vert: [], horiz: [] };
+  series.__dayLines = store;
+
+  const times = (candles || []).map(c => c.time).sort((a, b) => a - b);
+  const snap = (t) => times.find(ct => ct >= t) ?? times[times.length - 1];
+  const seen = new Set();
+  for (const m of (dayMarks || [])) {
+    const ct = snap(m.time);
+    if (ct == null || seen.has(ct)) continue;
+    seen.add(ct);
+    // 세로선: 거래일 경계
+    if (series.attachPrimitive) {
+      const v = new VertLine(ct + KST, CHART_COLORS.accent, `${m.day}일차`);
+      series.attachPrimitive(v);
+      store.vert.push(v);
+    }
+    // 가로선: 현재 거래일 시초가만
+    if (m.day === currentDay) {
+      store.horiz.push(series.createPriceLine({
+        price: m.open,
+        color: CHART_COLORS.accent,
+        lineWidth: 1,
+        lineStyle: 2, // 점선
+        axisLabelVisible: true,
+        title: `${m.day}일차 시초`,
+      }));
+    }
+  }
+}
+
+/** 라인 시리즈 색을 기준가 대비 등락에 따라 한국식으로(상승 빨강 / 하락 파랑) 적용 */
+export function applyLineColor(series, close, base) {
+  series.applyOptions({ color: close >= base ? CHART_COLORS.up : CHART_COLORS.down });
+}
+
+/** 서버 캔들(epoch초)을 KST 보정해서 모드에 맞게 세팅. 라인은 종가만 사용 */
+export function setSeriesData(series, candles, mode = 'candle') {
+  series.setData(mode === 'line'
+    ? candles.map(c => ({ time: c.time + KST, value: c.close }))
+    : candles.map(c => ({ ...c, time: c.time + KST })));
+}
+
+/**
+ * 틱 → 실시간 집계 피더. bucketSec 간격으로 점/봉을 만든다.
+ *  · 캔들 모드: candleSec(=여러 틱)로 묶어 몸통/꼬리가 있는 봉을 만든다.
+ *  · 라인 모드: tickSec로 묶어 틱마다 점을 찍는다.
+ * 서버는 가격 변경분(tick)만 보내므로 현재 봉/점은 클라이언트에서 만든다.
+ */
+export function makeFeed(series, lastCandle, bucketSec = 60, mode = 'candle') {
   let cur = lastCandle ? { ...lastCandle, time: lastCandle.time + KST } : null;
   return (ts, price) => {
-    const bucket = Math.floor(ts / 1000 / candleSec) * candleSec + KST;
+    const bucket = Math.floor(ts / 1000 / bucketSec) * bucketSec + KST;
     if (!cur || cur.time !== bucket) {
       cur = { time: bucket, open: price, high: price, low: price, close: price };
     } else {
@@ -73,7 +169,7 @@ export function makeCandleFeed(series, lastCandle, candleSec = 60) {
       if (price < cur.low) cur.low = price;
       cur.close = price;
     }
-    series.update(cur);
+    series.update(mode === 'line' ? { time: cur.time, value: cur.close } : cur);
   };
 }
 

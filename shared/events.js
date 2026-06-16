@@ -5,7 +5,8 @@
  * ───────────────────────── 클라이언트 → 서버 (ack 콜백 사용) ─────────────────────────
  * sync            ()                          → { game, stocks, news, newsHistory, leaderboard, joinUrl }
  *                 news = 티커용(TTL 내 최근 5건), newsHistory = 뉴스 탭용 전체 이력
- * join            { nickname }                → { ok, token?, player?, error? }
+ * join            { nickname, password }      → { ok, token?, player?, rejoined?, error? }
+ *                 닉네임이 이미 있으면 비밀번호 확인 후 재입장(rejoined:true), 없으면 신규 참가
  * resume          { token }                   → { ok, player?, error? }
  * trade           { symbol, side:'buy'|'sell', qty } → { ok, trade?, error? }   * 토큰은 소켓에 바인딩
  * chart:history   { symbol }                  → { ok, candles:[{time,open,high,low,close}], price }

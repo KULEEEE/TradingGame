@@ -126,8 +126,19 @@ aside { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
   display: flex;
   flex-direction: column;
 }
-.chart-head { display: flex; align-items: baseline; gap: 16px; font-size: 30px; font-weight: 800; margin-bottom: 10px; }
+.chart-head { display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 800; margin-bottom: 10px; }
 #chartPrice { font-size: 26px; }
+.chart-modes { display: flex; gap: 8px; }
+.chart-mode {
+  font-size: 16px; font-weight: 700; padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  background: var(--panel2); color: var(--muted); border: 1px solid var(--border);
+}
+.chart-mode.active { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+.chart-close {
+  font-size: 20px; line-height: 1; font-weight: 700; padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+}
+.chart-close:hover { background: var(--up); color: #fff; border-color: var(--up); }
 #bigChart { flex: 1; min-height: 0; }
 
 /* 상폐 배너 */

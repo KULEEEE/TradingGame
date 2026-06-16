@@ -38,7 +38,11 @@
       <div class="chart-head">
         <span id="chartTitle"></span>
         <span id="chartPrice"></span>
-        <span class="muted" style="margin-left:auto;font-size:16px">클릭하면 닫힙니다</span>
+        <span class="chart-modes" style="margin-left:auto">
+          <button id="modeCandle" class="chart-mode active" data-mode="candle">캔들</button>
+          <button id="modeLine" class="chart-mode" data-mode="line">라인</button>
+        </span>
+        <button id="chartClose" class="chart-close" title="닫기">✕</button>
       </div>
       <div id="bigChart"></div>
     </div>

@@ -12,9 +12,20 @@ const SPARK_LEN = 90;       // 스파크라인 포인트 수
 const DELIST_COUNTDOWN_SEC = 30; // 상폐 카운트다운 (초)
 const MAX_DAYS = 30;        // 총 거래일 상한
 
-// ── 가격 엔진(추세선 + 평균회귀 + 행동모델) 파라미터 ──
-const KAPPA = 0.08;          // 평균회귀 속도(초당). 클수록 추세선을 단단히 따라가 출렁임이 작아짐
-const MAX_SIGMA_STEP = 0.5;  // 한 틱 변동성 상한(폭주 방지)
+// ── 가격 엔진(마감목표 + 추세선 + VWAP회귀 노이즈) 파라미터 ──
+// 모델: 개장 시 그날 마감 수익률(dayRet)을 시나리오+난수로 확정 → 목표가(dayTarget)를 고정.
+//       장중에는 시가→목표가 로그선형 추세선(anchor)을 따라가되, 그 위로 평균회귀하는
+//       편차(dev)를 얹어 살아있게 움직인다. dev의 노이즈 진폭은 마감(u→1)에 0으로 수렴하므로
+//       종가는 항상 목표가에 안착한다. 모든 이벤트는 dev에 충격을 주고 추세선으로 되돌아온다(VWAP 계열).
+const DAY_RET_NOISE = 0.04;  // 마감 수익률 난수 표준편차(변동성 '보통' 기준). 변동성 배수로 스케일
+const DAY_RET_MIN = -0.6;    // 하루 수익률 하한(−60%)
+const DAY_RET_MAX = 1.0;     // 하루 수익률 상한(+100%)
+const DEV_THETA = 0.06;      // 편차의 추세선 회귀 속도(초당). 클수록 추세선에 빨리 붙음
+const DEV_CAP = 0.18;        // 추세선 대비 편차(로그) 상한 → 장중 ±~20% 이상 이탈 금지(폭주 차단)
+const MAX_SIGMA_STEP = 0.5;  // 한 틱 노이즈 계수(σ) 상한
+// 종목 volatility는 "초당" 값이라 한 틱(tickSec초)당 σ = vol·√tickSec 로 증폭된다.
+// config 값(0.02~0.04)은 초당 값치고 과대하므로 전역 보정으로 장중 노이즈를 적정 수준으로 낮춘다.
+const VOL_SCALE = 0.3;
 // 행동 이벤트 — 한쪽으로만 흐르지 않게 추세 중간에 끼어드는 모멘텀/되돌림(상·하 대칭)
 const TREND_WINDOW_SEC = 60;     // 단기 추세 판단 구간(초)
 const PROFIT_DEV = 0.08;         // 추세선 대비 ±8% 이상 괴리 → 회귀 가속(차익실현/저가매수) 후보
@@ -39,6 +50,9 @@ export const DEFAULT_SETTINGS = { initialCash: 10_000_000, durationMin: 5, feeRa
 
 const now = () => Date.now();
 const rid = (n = 8) => crypto.randomBytes(n).toString('hex');
+
+// 참가자 비밀번호 해시 (salt + sha256). 평문은 저장하지 않는다.
+const hashPw = (pw, salt) => crypto.createHash('sha256').update(salt + ':' + String(pw)).digest('hex');
 
 /** 표준정규 난수 (Box-Muller) */
 function gaussian() {
@@ -71,7 +85,7 @@ export class Game {
 
   // 틱 간격에서 파생되는 값들
   get tickMs() { return this.tickSec * 1000; }
-  get candleSec() { return Math.max(10, this.tickSec * 6); } // 캔들 1개 = 6틱 (기본 1분봉)
+  get candleSec() { return this.tickSec * 3; } // 캔들 1개 = 3틱 (몸통/꼬리가 생기도록; 1틱=1봉은 시·고·저·종이 같아 납작한 대시가 됨)
 
   // 시뮬레이션 파라미터(drift/volatility/STRENGTH_DRIFT)는 모두 "초당" 값.
   // 한 틱이 tickSec초이므로 GBM 1스텝은 μ·dt, σ·√dt 로 스케일한다.
@@ -110,8 +124,9 @@ export class Game {
       initialPrice,
       basePrice: initialPrice, // 전일 종가(등락률 기준). 거래일 개장 시 갱신
       price: initialPrice,     // 내부적으로 float 유지, 송출 시 반올림
-      fairValue: initialPrice, // 추세선(적정가). 시나리오 기울기대로 이동, 가격이 회귀
-      plannedDrift: 0,         // 이번 거래일 추세선 초당 드리프트(시나리오 환산)
+      dayOpen: initialPrice,   // 이번 거래일 시가(추세선 시작점)
+      dayTarget: initialPrice, // 이번 거래일 마감 목표가(개장 시 확정)
+      dev: 0,                  // 추세선 대비 편차(로그). VWAP 회귀 노이즈
       dayVolMul: 1,            // 이번 거래일 변동성 배수(시나리오)
       scenario: { trend: 'flat', vol: 'mid' }, // 다음 거래일에 예약된 추세 프리셋
       dayScenario: null,       // 이번(현재) 거래일에 실제 적용 중인 추세 프리셋
@@ -122,8 +137,9 @@ export class Game {
       halted: false,
       delisted: false,
       delistTicks: null,       // 상폐 카운트다운 (남은 틱)
-      candles: [],             // 확정된 10초봉
+      candles: [],             // 확정된 캔들 (1봉 = 3틱)
       candle: null,            // 만들고 있는 봉
+      dayMarks: [],            // 거래일 개장 마커 [{ day, time(epoch초 버킷), open }]
       spark: [initialPrice],
     };
     this.stocks.set(symbol, s);
@@ -180,7 +196,11 @@ export class Game {
     const s = this.stocks.get(symbol);
     if (!s || s.delisted) return { ok: false, error: '없는 종목이거나 상장폐지됨' };
     const p = Math.max(-90, Math.min(300, Number(pct) || 0));
-    s.price = Math.max(1, s.price * (1 + p / 100));
+    const k = 1 + p / 100;
+    // 추세 밴드(시가·목표가)를 함께 스케일 → 점프가 영구 반영되고 이후 추세선도 새 레벨에서 이어짐
+    s.dayOpen = Math.max(1, s.dayOpen * k);
+    s.dayTarget = Math.max(1, s.dayTarget * k);
+    s.price = Math.max(1, s.price * k);
     // 틱 간격이 길어도 점프는 즉시 보이도록 바로 브로드캐스트
     const ts = now();
     const rounded = Math.round(s.price);
@@ -258,27 +278,33 @@ export class Game {
     return { ok: true };
   }
 
-  /** 시나리오 프리셋 → 이번 거래일의 추세선 드리프트/변동성 배수로 환산 */
+  /** 시나리오 프리셋 → 이번 거래일 마감 목표 수익률/변동성 배수 확정 */
   applyScenario(s) {
     const trend = TREND_PRESETS[s.scenario.trend] || TREND_PRESETS.flat;
     const volp = VOL_PRESETS[s.scenario.vol] || VOL_PRESETS.mid;
-    const daySec = Math.max(1, this.settings.durationMin * 60);
-    // 하루 목표 변화율(daily)을 장 길이로 나눠 초당 드리프트로 환산 → 장 시간 무관하게 추세폭 일정
-    s.plannedDrift = Math.log(1 + trend.daily) / daySec;
     s.dayVolMul = volp.mul;
+    // 마감 수익률 = 추세 프리셋 중심 + 변동성에 비례한 난수. 추세는 분명히 보이되 날마다 다르게.
+    const dayRet = Math.max(DAY_RET_MIN, Math.min(DAY_RET_MAX,
+      trend.daily + gaussian() * DAY_RET_NOISE * volp.mul));
+    s.dayOpen = Math.max(1, s.price);
+    s.dayTarget = Math.max(1, s.dayOpen * (1 + dayRet));
+    s.dev = 0;
   }
 
   /** 거래일 개장: 추세선/등락률 기준 초기화 후 running 진입 */
   openDay(day) {
     this.currentDay = day;
+    const markTime = Math.floor(now() / 1000 / this.candleSec) * this.candleSec; // 개장 시각 버킷(epoch초)
     for (const s of this.stocks.values()) {
       if (s.delisted) continue;
-      this.applyScenario(s);
+      this.applyScenario(s);                // dayOpen/dayTarget/dev 확정
       s.dayScenario = { ...s.scenario };  // 이번 거래일에 적용된 추세(현재 적용 중)
       s.basePrice = Math.round(s.price);  // 전일 종가 = 이번 거래일 등락률 기준
-      s.fairValue = s.price;              // 추세선은 시가에서 출발
       s.modifiers = [];
       s.behaviorCooldown = 0;
+      // 차트 거래일 경계/시초가 마커
+      s.dayMarks.push({ day, time: markTime, open: Math.round(s.dayOpen) });
+      if (s.dayMarks.length > MAX_DAYS + 2) s.dayMarks.shift();
     }
     this.status = 'running';
     this.endsAt = now() + this.settings.durationMin * 60_000;
@@ -328,6 +354,9 @@ export class Game {
     const dt = this.tickSec;
     const trendWin = this.secToTicks(TREND_WINDOW_SEC);
     const coolTicks = this.secToTicks(BEHAVIOR_COOLDOWN_SEC);
+    const dayMs = Math.max(1, this.settings.durationMin * 60_000);
+    // 거래일 진행도 u (0=개장 … 1=마감). 마감에 가까울수록 노이즈가 줄어 종가가 목표가에 안착.
+    const u = Math.min(1, Math.max(0, 1 - (this.endsAt - ts) / dayMs));
 
     for (const s of this.stocks.values()) {
       if (s.delisted) continue;
@@ -343,28 +372,26 @@ export class Game {
       }
       if (s.halted) continue;
 
-      // 1) 추세선(적정가)을 시나리오 기울기대로 이동
-      const planDrift = s.plannedDrift + s.drift; // 시나리오 + 종목 고유 바이어스
-      s.fairValue = Math.max(1, s.fairValue * Math.exp(planDrift * dt));
+      // 1) 추세선(anchor): 시가→마감목표가 로그선형 경로. 그날의 확정된 추세 = VWAP 기준선.
+      const anchor = s.dayOpen * Math.pow(s.dayTarget / s.dayOpen, u);
 
-      // 2) 행동 이벤트: 한쪽으로만 흐르지 않게 차익실현/패닉셀을 확률적으로 끼워넣음
+      // 2) 행동 이벤트(모멘텀/되돌림)를 확률적으로 끼워넣음 → modifier로 dev에 충격
       this.maybeBehavior(s, trendWin, coolTicks);
 
-      // 3) modifier 스택(급등/급락/시장이벤트/행동이벤트) 합산
-      let drift = planDrift;
-      let vol = s.volatility * s.dayVolMul;
+      // 3) modifier 스택(급등/급락/시장이벤트/행동이벤트) 합산 → dev 드리프트/노이즈 배수
+      let pushDrift = s.drift; // 종목 고유 바이어스(작음)
+      let volMul = s.dayVolMul;
       s.modifiers = s.modifiers.filter(m => m.ticksLeft-- > 0);
-      for (const m of s.modifiers) { drift += m.driftDelta; vol *= m.volMul; }
+      for (const m of s.modifiers) { pushDrift += m.driftDelta; volMul *= m.volMul; }
 
-      // 4) 추세선으로의 평균회귀(로그공간) — 추세선에서 벌어질수록 되돌림이 커짐
-      const gap = Math.log(s.fairValue / s.price); // >0 이면 가격이 추세선보다 낮음 → 상승 압력
-      drift += KAPPA * gap;
-
-      // 5) GBM 1스텝 (dt초): μ·dt, σ·√dt
-      const mu = drift * dt;
-      const sigma = Math.min(vol * Math.sqrt(dt), MAX_SIGMA_STEP);
+      // 4) 편차(dev) = 추세선으로 평균회귀하는 OU 노이즈. 노이즈 진폭은 (1−u)로 마감에 0 수렴.
+      //    이벤트 드리프트(pushDrift)는 dev를 한쪽으로 밀지만 회귀로 결국 추세선에 되돌아온다.
+      const sigma = Math.min(s.volatility * volMul * VOL_SCALE * Math.sqrt(dt) * (1 - u), MAX_SIGMA_STEP);
       const z = gaussian();
-      s.price = Math.max(1, s.price * Math.exp((mu - (sigma * sigma) / 2) + sigma * z));
+      s.dev = s.dev * (1 - Math.min(1, DEV_THETA * dt)) + pushDrift * dt + sigma * z;
+      s.dev = Math.max(-DEV_CAP, Math.min(DEV_CAP, s.dev));
+
+      s.price = Math.max(1, anchor * Math.exp(s.dev));
       const p = Math.round(s.price);
       prices[s.symbol] = p;
       this.recordPrice(s, p, bucket);
@@ -390,7 +417,7 @@ export class Game {
     const n = s.spark.length;
     const past = s.spark[Math.max(0, n - 1 - trendWin)] || s.price;
     const shortRet = (s.price - past) / past;        // 단기 수익률
-    const dev = (s.price - s.fairValue) / s.fairValue; // 추세선 대비 괴리
+    const dev = s.dev;                                // 추세선 대비 괴리(로그편차)
 
     // 모멘텀: 단기 급락 → 패닉셀(투매), 단기 급등 → 추격매수(과열). (자동 이벤트라 뉴스는 띄우지 않음)
     if (shortRet <= -PANIC_DROP && Math.random() < PANIC_PROB) {
@@ -434,14 +461,32 @@ export class Game {
 
   // ───────────────────────── 참가자 ─────────────────────────
 
-  join(nickname) {
+  join(nickname, password) {
     nickname = String(nickname || '').trim().slice(0, 12);
     if (nickname.length < 1) return { ok: false, error: '닉네임을 입력하세요 (1~12자)' };
-    for (const p of this.players.values())
-      if (p.nickname === nickname) return { ok: false, error: '이미 사용 중인 닉네임입니다' };
+    password = String(password || '');
+    if (password.length < 1) return { ok: false, error: '비밀번호를 입력하세요' };
+
+    // 같은 닉네임이 이미 있으면 → 비밀번호 확인 후 그 참가자로 재입장
+    for (const p of this.players.values()) {
+      if (p.nickname !== nickname) continue;
+      if (p.pwHash) {
+        if (p.pwHash !== hashPw(password, p.salt)) return { ok: false, error: '비밀번호가 틀렸습니다' };
+      } else {
+        // 비밀번호 도입 이전에 만들어진 참가자 → 이번 비밀번호로 설정(계정 인계)
+        p.salt = rid(8);
+        p.pwHash = hashPw(password, p.salt);
+      }
+      return { ok: true, token: p.token, player: this.playerState(p), rejoined: true };
+    }
+
+    // 신규 참가
+    const salt = rid(8);
     const player = {
       token: rid(16),
       nickname,
+      salt,
+      pwHash: hashPw(password, salt),
       cash: this.settings.initialCash,
       initialCash: this.settings.initialCash,
       holdings: {}, // symbol -> { qty, avgPrice }
@@ -622,7 +667,9 @@ export class Game {
     for (const s of this.stocks.values()) {
       s.price = s.initialPrice;
       s.basePrice = s.initialPrice;
-      s.fairValue = s.initialPrice;
+      s.dayOpen = s.initialPrice;
+      s.dayTarget = s.initialPrice;
+      s.dev = 0;
       s.dayScenario = null;
       s.behaviorCooldown = 0;
       s.modifiers = [];
@@ -631,6 +678,7 @@ export class Game {
       s.delistTicks = null;
       s.candles = [];
       s.candle = null;
+      s.dayMarks = [];
       s.spark = [s.initialPrice];
       // 시나리오(scenario)는 보존 — 다음 게임에도 같은 세팅을 재사용
     }
@@ -779,7 +827,7 @@ export class Game {
     const s = this.stocks.get(String(symbol || '').toUpperCase());
     if (!s) return { ok: false, error: '없는 종목' };
     const candles = s.candle ? [...s.candles, s.candle] : [...s.candles];
-    return { ok: true, candles, price: Math.round(s.price) };
+    return { ok: true, candles, price: Math.round(s.price), dayMarks: s.dayMarks, currentDay: this.currentDay };
   }
 
   adminState() {
@@ -813,14 +861,16 @@ export class Game {
 
   /** 구버전 스냅샷에 새 가격엔진/시나리오 필드를 보강 */
   hydrateStock(s) {
-    if (s.fairValue == null) s.fairValue = s.price ?? s.initialPrice;
-    if (s.plannedDrift == null) s.plannedDrift = 0;
+    if (s.dayOpen == null) s.dayOpen = s.price ?? s.initialPrice;
+    if (s.dayTarget == null) s.dayTarget = s.price ?? s.initialPrice;
+    if (s.dev == null) s.dev = 0;
     if (s.dayVolMul == null) s.dayVolMul = 1;
     if (s.behaviorCooldown == null) s.behaviorCooldown = 0;
     if (s.dayScenario === undefined) s.dayScenario = null;
     if (!s.scenario || !TREND_PRESETS[s.scenario.trend] || !VOL_PRESETS[s.scenario.vol])
       s.scenario = { trend: 'flat', vol: 'mid' };
     if (!Array.isArray(s.modifiers)) s.modifiers = [];
+    if (!Array.isArray(s.dayMarks)) s.dayMarks = [];
     return s;
   }
 
