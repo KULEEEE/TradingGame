@@ -1,10 +1,12 @@
 [
-  { "symbol": "CHIK", "name": "치킨공방",     "initialPrice": 50000,  "volatility": 0.020, "drift": 0.0002 },
-  { "symbol": "YAKN", "name": "야근방지제약", "initialPrice": 120000, "volatility": 0.015, "drift": 0.0001 },
-  { "symbol": "MEET", "name": "회의실탈출",   "initialPrice": 8000,   "volatility": 0.030, "drift": 0.0003 },
-  { "symbol": "LNCH", "name": "점심뭐먹지AI", "initialPrice": 30000,  "volatility": 0.025, "drift": 0.0002 },
-  { "symbol": "COFF", "name": "카페인나라",   "initialPrice": 15000,  "volatility": 0.018, "drift": 0.0002 },
-  { "symbol": "HOME", "name": "재택로지스",   "initialPrice": 70000,  "volatility": 0.020, "drift": 0.0001 },
-  { "symbol": "BOSS", "name": "보스무드분석", "initialPrice": 5000,   "volatility": 0.040, "drift": 0.0003 },
-  { "symbol": "WKND", "name": "주말연구소",   "initialPrice": 200000, "volatility": 0.012, "drift": 0.0001 }
+  { "symbol": "GFCA", "name": "GF자동차",            "initialPrice": 600000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "strong_up",   "vol": "mid"  } },
+  { "symbol": "DEEL", "name": "델타전자",             "initialPrice": 300000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "flat",        "vol": "mid"  } },
+  { "symbol": "DOEN", "name": "도원에너빌리티",       "initialPrice": 100000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "strong_down", "vol": "mid"  } },
+  { "symbol": "SKNX", "name": "시키하이닉스",         "initialPrice": 2000000, "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "flat",        "vol": "mid"  } },
+  { "symbol": "ONAS", "name": "오니에어로스페이스",   "initialPrice": 1300000, "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "down",        "vol": "mid"  } },
+  { "symbol": "MOET", "name": "모모타로엔터테인먼트", "initialPrice": 60000,   "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "down",        "vol": "mid"  } },
+  { "symbol": "GARB", "name": "가치아쿠타로보틱스",   "initialPrice": 150000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "down",        "vol": "mid"  } },
+  { "symbol": "RDES", "name": "루도에너지솔루션",     "initialPrice": 300000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "down",        "vol": "mid"  } },
+  { "symbol": "GFXX", "name": "GFace X",              "initialPrice": 300000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "down",        "vol": "mid"  } },
+  { "symbol": "TXXX", "name": "KODEX 태호슬라 3X",    "initialPrice": 500000,  "volatility": 0.02, "drift": 0.0002, "scenario": { "trend": "strong_up",   "vol": "high" } }
 ]

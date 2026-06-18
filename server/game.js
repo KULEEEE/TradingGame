@@ -118,6 +118,10 @@ export class Game {
     if (this.stocks.has(symbol)) return { ok: false, error: '이미 있는 심볼입니다' };
     const initialPrice = Math.max(1, Math.round(Number(def.initialPrice) || 0));
     if (!initialPrice || !def.name) return { ok: false, error: '이름/시작가를 확인하세요' };
+    // config에 시나리오가 적혀 있으면 그대로, 아니면 기본(횡보·보통)
+    const scenario = (def.scenario && TREND_PRESETS[def.scenario.trend] && VOL_PRESETS[def.scenario.vol])
+      ? { trend: def.scenario.trend, vol: def.scenario.vol }
+      : { trend: 'flat', vol: 'mid' };
     const s = {
       symbol,
       name: String(def.name).slice(0, 20),
@@ -128,7 +132,7 @@ export class Game {
       dayTarget: initialPrice, // 이번 거래일 마감 목표가(개장 시 확정)
       dev: 0,                  // 추세선 대비 편차(로그). VWAP 회귀 노이즈
       dayVolMul: 1,            // 이번 거래일 변동성 배수(시나리오)
-      scenario: { trend: 'flat', vol: 'mid' }, // 다음 거래일에 예약된 추세 프리셋
+      scenario,                // 다음 거래일에 예약된 추세 프리셋 (config 또는 기본)
       dayScenario: null,       // 이번(현재) 거래일에 실제 적용 중인 추세 프리셋
       behaviorCooldown: 0,     // 행동 이벤트 쿨다운(남은 틱)
       volatility: Number(def.volatility) || 0.02,
@@ -859,19 +863,33 @@ export class Game {
     };
   }
 
-  /** 구버전 스냅샷에 새 가격엔진/시나리오 필드를 보강 */
-  hydrateStock(s) {
-    if (s.dayOpen == null) s.dayOpen = s.price ?? s.initialPrice;
-    if (s.dayTarget == null) s.dayTarget = s.price ?? s.initialPrice;
-    if (s.dev == null) s.dev = 0;
-    if (s.dayVolMul == null) s.dayVolMul = 1;
-    if (s.behaviorCooldown == null) s.behaviorCooldown = 0;
-    if (s.dayScenario === undefined) s.dayScenario = null;
-    if (!s.scenario || !TREND_PRESETS[s.scenario.trend] || !VOL_PRESETS[s.scenario.vol])
-      s.scenario = { trend: 'flat', vol: 'mid' };
-    if (!Array.isArray(s.modifiers)) s.modifiers = [];
-    if (!Array.isArray(s.dayMarks)) s.dayMarks = [];
-    return s;
+  /**
+   * 종목 "정의"는 항상 config/stocks.json 기준(생성자에서 이미 로드됨).
+   * 진행 중이던 거래일의 가격/캔들/시나리오 등 "라이브 상태"만 스냅샷에서 이어붙인다.
+   * → 종목 목록·이름·파라미터는 config가 단일 출처. 스냅샷에만 있는 종목은 무시.
+   */
+  mergeStockState(snapStocks) {
+    const bySym = new Map((snapStocks || []).map(s => [s.symbol, s]));
+    for (const s of this.stocks.values()) {
+      const o = bySym.get(s.symbol);
+      if (!o) continue; // 스냅샷에 없으면 config 초기값 그대로
+      s.price = o.price ?? s.price;
+      s.basePrice = o.basePrice ?? s.basePrice;
+      s.dayOpen = o.dayOpen ?? s.dayOpen;
+      s.dayTarget = o.dayTarget ?? s.dayTarget;
+      s.dev = o.dev ?? 0;
+      s.dayVolMul = o.dayVolMul ?? 1;
+      s.dayScenario = o.dayScenario ?? null;
+      s.behaviorCooldown = o.behaviorCooldown ?? 0;
+      s.modifiers = Array.isArray(o.modifiers) ? o.modifiers : [];
+      s.halted = !!o.halted;
+      s.delisted = !!o.delisted;
+      s.delistTicks = o.delistTicks ?? null;
+      s.candles = Array.isArray(o.candles) ? o.candles : [];
+      s.candle = o.candle ?? null;
+      s.dayMarks = Array.isArray(o.dayMarks) ? o.dayMarks : [];
+      s.spark = Array.isArray(o.spark) ? o.spark : [Math.round(s.price)];
+    }
   }
 
   restore(snap) {
@@ -885,7 +903,7 @@ export class Game {
       this.tickCount = snap.tickCount || 0;
       this.currentDay = snap.currentDay || 0;
       this.news = snap.news || [];
-      this.stocks = new Map((snap.stocks || []).map(s => [s.symbol, this.hydrateStock(s)]));
+      this.mergeStockState(snap.stocks); // 종목 정의는 config, 라이브 상태만 스냅샷에서
       this.players = new Map((snap.players || []).map(p => [p.token, p]));
       this.remainingMs = snap.remainingMs ?? this.settings.durationMin * 60_000;
       // 진행 중이던 거래일은 일시정지 상태로 복구 → 관리자가 '재개'로 이어감. 휴장은 그대로.

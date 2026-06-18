@@ -145,29 +145,44 @@ export function applyLineColor(series, close, base) {
   series.applyOptions({ color: close >= base ? CHART_COLORS.up : CHART_COLORS.down });
 }
 
-/** 서버 캔들(epoch초)을 KST 보정해서 모드에 맞게 세팅. 라인은 종가만 사용 */
+/**
+ * 서버 캔들(epoch초)을 KST 보정해서 모드에 맞게 세팅.
+ *  · 라인: 종가만 사용.
+ *  · 캔들(간소화): 시가 = 직전 봉 종가(연결), 꼬리 없이 몸통만. 오르면 양봉(빨강)/내리면 음봉(파랑).
+ */
 export function setSeriesData(series, candles, mode = 'candle') {
-  series.setData(mode === 'line'
-    ? candles.map(c => ({ time: c.time + KST, value: c.close }))
-    : candles.map(c => ({ ...c, time: c.time + KST })));
+  if (mode === 'line') {
+    series.setData(candles.map(c => ({ time: c.time + KST, value: c.close })));
+    return;
+  }
+  let prev = null;
+  series.setData(candles.map(c => {
+    const open = prev ?? c.open ?? c.close;
+    const close = c.close;
+    prev = close;
+    return { time: c.time + KST, open, high: Math.max(open, close), low: Math.min(open, close), close };
+  }));
 }
 
 /**
  * 틱 → 실시간 집계 피더. bucketSec 간격으로 점/봉을 만든다.
- *  · 캔들 모드: candleSec(=여러 틱)로 묶어 몸통/꼬리가 있는 봉을 만든다.
- *  · 라인 모드: tickSec로 묶어 틱마다 점을 찍는다.
+ *  · 캔들(간소화): 한 봉의 시가 = 직전 봉 종가, 꼬리 없이 몸통만. (떨어지면 음봉/오르면 양봉)
+ *  · 라인: 틱마다 종가를 점으로 찍는다.
  * 서버는 가격 변경분(tick)만 보내므로 현재 봉/점은 클라이언트에서 만든다.
  */
 export function makeFeed(series, lastCandle, bucketSec = 60, mode = 'candle') {
   let cur = lastCandle ? { ...lastCandle, time: lastCandle.time + KST } : null;
+  let prevClose = lastCandle ? lastCandle.close : null;
   return (ts, price) => {
     const bucket = Math.floor(ts / 1000 / bucketSec) * bucketSec + KST;
     if (!cur || cur.time !== bucket) {
-      cur = { time: bucket, open: price, high: price, low: price, close: price };
+      if (cur) prevClose = cur.close;          // 직전 봉 종가 → 새 봉 시가
+      const open = prevClose ?? price;
+      cur = { time: bucket, open, high: Math.max(open, price), low: Math.min(open, price), close: price };
     } else {
-      if (price > cur.high) cur.high = price;
-      if (price < cur.low) cur.low = price;
       cur.close = price;
+      cur.high = Math.max(cur.open, price);    // 꼬리 없이 몸통만
+      cur.low = Math.min(cur.open, price);
     }
     series.update(mode === 'line' ? { time: cur.time, value: cur.close } : cur);
   };
